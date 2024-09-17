@@ -1,7 +1,7 @@
 module Main where
 
 import Test.Hspec
-import qualified Data.Vector.Storable as V
+import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Word
 import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
@@ -11,8 +11,8 @@ import ADSB.AircraftTracker
 import Data.Maybe (isJust)
 
 -- Helper functions
-hexToVector :: String -> V.Vector Word8
-hexToVector = V.fromList . map (read . ("0x" ++)) . chunksOf 2
+hexToByteString :: String -> BS.ByteString
+hexToByteString = BS.pack . map (read . ("0x" ++)) . chunksOf 2
   where
     chunksOf n [] = []
     chunksOf n xs = take n xs : chunksOf n (drop n xs)
@@ -25,15 +25,15 @@ main = hspec $ do
   describe "ADSB.Decoder" $ do
     describe "Basic decoding" $ do
       it "extracts bits correctly" $ do
-        let testVec = V.fromList [0xAA, 0xBB, 0xCC, 0xDD] :: V.Vector Word8
-        extractBits testVec 0 8 `shouldBe` 0xAA
-        extractBits testVec 8 8 `shouldBe` 0xBB
-        extractBits testVec 4 8 `shouldBe` 0xAB
-        extractBits testVec 0 32 `shouldBe` 0xAABBCCDD
+        let testBS = BS.pack [0xAA, 0xBB, 0xCC, 0xDD]
+        extractBits testBS 0 8 `shouldBe` 0xAA
+        extractBits testBS 8 8 `shouldBe` 0xBB
+        extractBits testBS 4 8 `shouldBe` 0xAB
+        extractBits testBS 0 32 `shouldBe` 0xAABBCCDD
 
     describe "Message type decoding" $ do
       it "decodes aircraft identification message correctly" $ do
-        let msg = hexToVector "8D4840D6202CC371C32CE0576098"
+        let msg = hexToByteString "8D4840D6202CC371C32CE0576098"
         let result = decodeMessage msg
         result `shouldSatisfy` isJust
         let Just decodedMsg = result
@@ -45,8 +45,8 @@ main = hspec $ do
           _ -> expectationFailure "Expected AircraftIdentificationData"
 
       it "decodes airborne position messages correctly" $ do
-        let msg0 = hexToVector "8D40621D58C382D690C8AC2863A7"
-        let msg1 = hexToVector "8D40621D58C386435CC412692AD6"
+        let msg0 = hexToByteString "8D40621D58C382D690C8AC2863A7"
+        let msg1 = hexToByteString "8D40621D58C386435CC412692AD6"
         let result0 = decodeMessage msg0
         let result1 = decodeMessage msg1
         
@@ -72,7 +72,7 @@ main = hspec $ do
           _ -> expectationFailure "Expected AirbornePositionData"
 
       it "decodes surface position message correctly" $ do
-        let surfaceMsg = hexToVector "8C4841753A9A153237AEF0F275BE"
+        let surfaceMsg = hexToByteString "8C4841753A9A153237AEF0F275BE"
         let result = decodeMessage surfaceMsg
         result `shouldSatisfy` isJust
         let Just decodedMsg = result
@@ -88,8 +88,8 @@ main = hspec $ do
           _ -> expectationFailure "Expected SurfacePositionData"
 
       it "decodes airborne velocity messages correctly" $ do
-        let msgA = hexToVector "8D485020994409940838175B284F"
-        let msgB = hexToVector "8DA05F219B06B6AF189400CBC33F"
+        let msgA = hexToByteString "8D485020994409940838175B284F"
+        let msgB = hexToByteString "8DA05F219B06B6AF189400CBC33F"
         
         let resultA = decodeMessage msgA
         let resultB = decodeMessage msgB
@@ -121,8 +121,8 @@ main = hspec $ do
 
     describe "CPR decoding" $ do
       it "decodeCPRPosition correctly identifies even and odd messages" $ do
-        let evenMsg = V.fromList [0x58, 0xC3, 0x82, 0xD6, 0x90, 0xC8, 0xAC]  -- Even message
-        let oddMsg  = V.fromList [0x58, 0xC3, 0x86, 0x43, 0x5C, 0xC4, 0x12]  -- Odd message
+        let evenMsg = BS.pack [0x58, 0xC3, 0x82, 0xD6, 0x90, 0xC8, 0xAC]  -- Even message
+        let oddMsg  = BS.pack [0x58, 0xC3, 0x86, 0x43, 0x5C, 0xC4, 0x12]  -- Odd message
         
         let evenCPR = decodeCPRPosition evenMsg
         let oddCPR  = decodeCPRPosition oddMsg
@@ -138,8 +138,8 @@ main = hspec $ do
   describe "ADSB.AircraftTracker" $ do
     describe "Aircraft map updates" $ do
       it "updates aircraft map correctly and calculates global position" $ do
-        let msg0 = hexToVector "8D40621D58C382D690C8AC2863A7"
-        let msg1 = hexToVector "8D40621D58C386435CC412692AD6"
+        let msg0 = hexToByteString "8D40621D58C382D690C8AC2863A7"
+        let msg1 = hexToByteString "8D40621D58C386435CC412692AD6"
         let emptyAircraftMap = Map.empty
         
         let Just decodedMsg0 = decodeMessage msg0
@@ -165,7 +165,7 @@ main = hspec $ do
 
     describe "Altitude decoding" $ do
       it "decodes altitude correctly" $ do
-        let msg = hexToVector "8D40621D58C382D690C8AC2863A7"
+        let msg = hexToByteString "8D40621D58C382D690C8AC2863A7"
         let Just decodedMsg = decodeMessage msg
         let emptyAircraftMap = Map.empty
         let aircraftMap = updateAircraft dummyTime emptyAircraftMap decodedMsg

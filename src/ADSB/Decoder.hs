@@ -22,7 +22,7 @@ module ADSB.Decoder
     , extractBits
     ) where
 
-import qualified Data.Vector.Storable as V
+import qualified Data.ByteString as BS
 import Data.Word
 import Data.Bits
 import Data.Char (chr)
@@ -31,7 +31,7 @@ import Data.Fixed (mod')
 type ICAO = (Word8, Word8, Word8)
 
 data ADSBMessage = ADSBMessage
-    { msgraw :: V.Vector Word8
+    { msgraw :: BS.ByteString
     , msgbits :: Int
     , msgtype :: Word8
     , crcOk :: Bool
@@ -106,13 +106,13 @@ data CapacityClass = AirborneCapacity Word16 | SurfaceCapacity Word16 deriving (
 
 data OperationalMode = AirborneOperationalMode Word16 | SurfaceOperationalMode Word16 deriving (Show, Eq)
 
-decodeMessage :: V.Vector Word8 -> Maybe ADSBMessage
+decodeMessage :: BS.ByteString -> Maybe ADSBMessage
 decodeMessage rawBytes 
-    | V.length rawBytes /= 14 = Nothing
+    | BS.length rawBytes /= 14 = Nothing
     | otherwise = 
         let icao = extractICAOAddress rawBytes
             tc = extractTypeCode rawBytes
-            msgData = decodeMessageData tc (V.slice 4 7 rawBytes)
+            msgData = decodeMessageData tc (BS.drop 4 $ BS.take 11 rawBytes)
         in Just ADSBMessage
             { msgraw = rawBytes
             , msgbits = 112
@@ -124,16 +124,16 @@ decodeMessage rawBytes
             , messageData = msgData
             }
 
-extractDF :: V.Vector Word8 -> Word8
-extractDF rawBytes = (V.head rawBytes `shiftR` 3) .&. 0x1F
+extractDF :: BS.ByteString -> Word8
+extractDF rawBytes = (BS.head rawBytes `shiftR` 3) .&. 0x1F
 
-extractICAOAddress :: V.Vector Word8 -> ICAO
-extractICAOAddress rawBytes = (rawBytes V.! 1, rawBytes V.! 2, rawBytes V.! 3)
+extractICAOAddress :: BS.ByteString -> ICAO
+extractICAOAddress rawBytes = (BS.index rawBytes 1, BS.index rawBytes 2, BS.index rawBytes 3)
 
-extractTypeCode :: V.Vector Word8 -> Word8
-extractTypeCode rawBytes = (rawBytes V.! 4) `shiftR` 3
+extractTypeCode :: BS.ByteString -> Word8
+extractTypeCode rawBytes = (BS.index rawBytes 4) `shiftR` 3
 
-decodeMessageData :: Word8 -> V.Vector Word8 -> MessageData
+decodeMessageData :: Word8 -> BS.ByteString -> MessageData
 decodeMessageData tc meField
     | tc >= 1 && tc <= 4 = AircraftIdentificationData { identCallsign = decodeCallsign meField }
     | tc >= 5 && tc <= 8 =
@@ -158,9 +158,9 @@ decodeMessageData tc meField
     | tc == 31 = AircraftOperationStatusData (decodeOperationStatus meField)
     | otherwise = UnknownMessageData
 
-decodeCallsign :: V.Vector Word8 -> String
+decodeCallsign :: BS.ByteString -> String
 decodeCallsign meField = 
-    takeWhile (/= ' ') $ map decodeChar $ extractChars $ V.toList $ V.slice 1 6 meField
+    takeWhile (/= ' ') $ map decodeChar $ extractChars $ BS.unpack $ BS.drop 1 $ BS.take 7 meField
   where
     extractChars :: [Word8] -> [Int]
     extractChars [] = []
@@ -179,7 +179,7 @@ decodeCallsign meField =
         | n == 32 = ' '                     -- Space
         | otherwise = '#'                   -- Invalid character
 
-decodeOperationStatus :: V.Vector Word8 -> OperationStatus
+decodeOperationStatus :: BS.ByteString -> OperationStatus
 decodeOperationStatus meField =
     let st = decodeSubType (fromIntegral $ extractBits meField 6 3)
         cc = decodeCapacityClass st (fromIntegral $ extractBits meField 9 16)
@@ -209,7 +209,7 @@ decodeOperationalMode :: SubType -> Word16 -> OperationalMode
 decodeOperationalMode AirborneStatus om = AirborneOperationalMode om
 decodeOperationalMode _ om = SurfaceOperationalMode om
 
-decodeSurfaceMovement :: V.Vector Word8 -> SurfaceMovement
+decodeSurfaceMovement :: BS.ByteString -> SurfaceMovement
 decodeSurfaceMovement meField =
     let movCode = extractBits meField 5 7
         speed = case movCode of
@@ -225,7 +225,7 @@ decodeSurfaceMovement meField =
             _ -> Nothing  -- Reserved
     in SurfaceMovement { groundSpeed = speed }
 
-decodeGroundTrack :: V.Vector Word8 -> GroundTrack
+decodeGroundTrack :: BS.ByteString -> GroundTrack
 decodeGroundTrack meField =
     let statusBit = testBit (extractBits meField 12 1) 0
         trackCode = extractBits meField 13 7
@@ -234,7 +234,7 @@ decodeGroundTrack meField =
                 else Nothing
     in GroundTrack { trackAngle = track, trackValid = statusBit }
 
-decodeAirborneVelocity :: V.Vector Word8 -> AirborneVelocityInfo
+decodeAirborneVelocity :: BS.ByteString -> AirborneVelocityInfo
 decodeAirborneVelocity meField =
     let subType = fromIntegral $ extractBits meField 5 3 :: Word8
         verticalRateInfo = decodeVerticalRate meField
@@ -246,7 +246,7 @@ decodeAirborneVelocity meField =
         4 -> decodeAirSpeed 4 meField verticalRateInfo gnssBaroDiff
         _ -> AirborneVelocityInfo GroundSpeed Nothing Nothing Nothing GNSS Nothing
 
-decodeGroundSpeed :: Word8 -> V.Vector Word8 -> (Maybe Double, VerticalRateSource) -> Maybe Double -> AirborneVelocityInfo
+decodeGroundSpeed :: Word8 -> BS.ByteString -> (Maybe Double, VerticalRateSource) -> Maybe Double -> AirborneVelocityInfo
 decodeGroundSpeed subType meField (vr, vrSource) gbd =
     let ewSign = testBit (extractBits meField 13 1) 0
         ewVel = extractBits meField 14 10
@@ -262,7 +262,7 @@ decodeGroundSpeed subType meField (vr, vrSource) gbd =
         heading = (atan2 vx vy * 180 / pi + 360) `mod'` 360
     in AirborneVelocityInfo GroundSpeed (Just speed) (Just heading) vr vrSource gbd
 
-decodeAirSpeed :: Word8 -> V.Vector Word8 -> (Maybe Double, VerticalRateSource) -> Maybe Double -> AirborneVelocityInfo
+decodeAirSpeed :: Word8 -> BS.ByteString -> (Maybe Double, VerticalRateSource) -> Maybe Double -> AirborneVelocityInfo
 decodeAirSpeed subType meField (vr, vrSource) gbd =
     let headingAvailable = testBit (extractBits meField 13 1) 0
         hdg = extractBits meField 14 10
@@ -279,7 +279,7 @@ decodeAirSpeed subType meField (vr, vrSource) gbd =
                 else Just $ velocityMultiplier * (fromIntegral as - 1)
     in AirborneVelocityInfo AirSpeed speed heading vr vrSource gbd
 
-decodeVerticalRate :: V.Vector Word8 -> (Maybe Double, VerticalRateSource)
+decodeVerticalRate :: BS.ByteString -> (Maybe Double, VerticalRateSource)
 decodeVerticalRate meField =
     let vrSource = if testBit (extractBits meField 35 1) 0 then Barometric else GNSS
         vrSign = testBit (extractBits meField 36 1) 0
@@ -289,7 +289,7 @@ decodeVerticalRate meField =
              else Just $ (fromIntegral vrValue - 1) * 64 * (if vrSign then -1 else 1)
     in (vr, vrSource)
 
-decodeGNSSBaroDiff :: V.Vector Word8 -> Maybe Double
+decodeGNSSBaroDiff :: BS.ByteString -> Maybe Double
 decodeGNSSBaroDiff meField =
     let diffSign = testBit (extractBits meField 48 1) 0
         diffValue = extractBits meField 49 7
@@ -297,20 +297,20 @@ decodeGNSSBaroDiff meField =
        then Nothing
        else Just $ fromIntegral diffValue * 25 * (if diffSign then -1 else 1)
 
-decodeCPRPosition :: V.Vector Word8 -> CPRPosition
+decodeCPRPosition :: BS.ByteString -> CPRPosition
 decodeCPRPosition meField =
     let f = testBit (extractBits meField 21 1) 0  -- CPR Format (F) is bit 22
         lat = fromIntegral (extractBits meField 22 17) / 131072.0  -- LAT-CPR starts at bit 23
         lon = fromIntegral (extractBits meField 39 17) / 131072.0  -- LON-CPR starts at bit 40
     in CPRPosition lat lon f
 
-decodeAltitude :: Word8 -> V.Vector Word8 -> Maybe Double
+decodeAltitude :: Word8 -> BS.ByteString -> Maybe Double
 decodeAltitude tc meField
     | tc >= 9 && tc <= 18 = decodeBarometricAltitude meField
     | tc >= 20 && tc <= 22 = decodeGNSSHeight meField
     | otherwise = Nothing
 
-decodeBarometricAltitude :: V.Vector Word8 -> Maybe Double
+decodeBarometricAltitude :: BS.ByteString -> Maybe Double
 decodeBarometricAltitude meField = 
     let altCode = extractBits meField 8 12
     in if altCode == 0
@@ -334,21 +334,20 @@ decodeBarometricAltitude meField =
         go 0 acc = acc
         go x acc = go (x `shiftR` 1) (acc `xor` x)
 
-decodeGNSSHeight :: V.Vector Word8 -> Maybe Double
+decodeGNSSHeight :: BS.ByteString -> Maybe Double
 decodeGNSSHeight meField =
     let heightCode = extractBits meField 8 12
     in Just $ fromIntegral heightCode * 25 - 1000
 
-computeCRC :: V.Vector Word8 -> Word32
+computeCRC :: BS.ByteString -> Word32
 computeCRC _ = 0  -- Placeholder, actual CRC computation needed
 
-extractBits :: V.Vector Word8 -> Int -> Int -> Word32
-extractBits vec startBit numBits = 
+extractBits :: BS.ByteString -> Int -> Int -> Word32
+extractBits bs startBit numBits = 
     let startByte = startBit `div` 8
-        endByte = (startBit + numBits - 1) `div` 8
-        relevantBytes = V.slice startByte (endByte - startByte + 1) vec
-        shiftRight = (8 - (startBit + numBits) `mod` 8) `mod` 8
-        allBits = V.foldl' (\acc byte -> (acc `shiftL` 8) .|. fromIntegral byte) 0 relevantBytes
-        alignedBits = allBits `shiftR` shiftRight
+        bitOffset = startBit `mod` 8
+        relevantBytes = BS.take (((bitOffset + numBits + 7) `div` 8)) $ BS.drop startByte bs
+        value = BS.foldl' (\acc byte -> (acc `shiftL` 8) .|. fromIntegral byte) 0 relevantBytes
+        shiftRight = (8 - (bitOffset + numBits) `mod` 8) `mod` 8
         mask = (1 `shiftL` numBits) - 1
-    in alignedBits .&. mask
+    in (value `shiftR` shiftRight) .&. mask

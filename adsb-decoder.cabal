@@ -15,7 +15,8 @@ common shared-properties
     build-depends:      base >= 4.16 && < 5,
                         vector,
                         containers,
-                        time
+                        time,
+                        bytestring
 
 library
     import:             shared-properties
