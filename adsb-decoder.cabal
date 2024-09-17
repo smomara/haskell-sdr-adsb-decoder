@@ -1,0 +1,50 @@
+cabal-version:      2.4
+name:               adsb-decoder
+version:            0.1.0.0
+synopsis:           RTL-SDR signal processing in Haskell
+description:        A Haskell project for interfacing with RTL-SDR devices, performing digital signal processing, and concurrent signal analysis.
+license:            BSD-3-Clause
+author:             Sean O'Mara
+maintainer:         mseanomara@gmail.com
+copyright:          2024 Sean O'Mara
+category:           Radio
+
+common shared-properties
+    ghc-options:        -Wall -threaded
+    default-language:   Haskell2010
+    build-depends:      base >= 4.16 && < 5,
+                        vector,
+                        containers,
+                        time
+
+library
+    import:             shared-properties
+    hs-source-dirs:     src
+    exposed-modules:    RTLSDR.FFI,
+                        RTLSDR.Types,
+                        ADSB.Detector,
+                        ADSB.Decoder,
+                        ADSB.AircraftTracker
+    c-sources:          cbits/rtlsdr_wrapper.c
+    include-dirs:       cbits
+    extra-libraries:    rtlsdr
+                        m
+    pkgconfig-depends:  librtlsdr
+
+executable adsb-decoder
+    import:             shared-properties
+    main-is:            Main.hs
+    hs-source-dirs:     app
+    build-depends:      adsb-decoder
+    ghc-options:        -threaded -rtsopts -with-rtsopts=-N
+    extra-libraries:    rtlsdr
+
+test-suite adsb-decoder-test
+    import:             shared-properties
+    type:               exitcode-stdio-1.0
+    hs-source-dirs:     test
+    main-is:            Spec.hs
+    build-depends:      adsb-decoder,
+                        hspec >= 2.7.1,
+                        vector
+    ghc-options:        -threaded -rtsopts -with-rtsopts=-N
