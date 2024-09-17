@@ -9,6 +9,8 @@ import qualified Data.Map.Strict as Map
 import Data.Time.Clock (UTCTime, diffUTCTime)
 import Control.Applicative ((<|>))
 import ADSB.Decoder
+import ADSB.Decoder.Position
+import ADSB.Decoder.Velocity
 
 type AircraftMap = Map.Map ICAO Aircraft
 

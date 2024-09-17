@@ -6,9 +6,14 @@ import qualified Data.Map.Strict as Map
 import Data.Word
 import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
 import Data.Time.Calendar (fromGregorian)
-import ADSB.Decoder
-import ADSB.AircraftTracker
 import Data.Maybe (isJust)
+
+import ADSB.Decoder
+import ADSB.Decoder.Position
+import ADSB.Decoder.Velocity
+import ADSB.Decoder.OperationStatus
+import ADSB.Decoder.Util
+import ADSB.AircraftTracker
 
 -- Helper functions
 hexToByteString :: String -> BS.ByteString
