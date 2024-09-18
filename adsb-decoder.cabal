@@ -30,7 +30,8 @@ library
                         ADSB.Decoder.OperationStatus,
                         ADSB.Decoder.CRC,
                         ADSB.Decoder.Util,
-                        ADSB.AircraftTracker
+                        ADSB.AircraftTracker,
+                        ADSB.ErrorCorrection
     c-sources:          cbits/rtlsdr_wrapper.c
     include-dirs:       cbits
     extra-libraries:    rtlsdr

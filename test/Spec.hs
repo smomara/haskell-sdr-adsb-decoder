@@ -4,6 +4,7 @@ import Test.Hspec
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Word
+import Data.Bits
 import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
 import Data.Time.Calendar (fromGregorian)
 import Data.Maybe (isJust)
@@ -14,6 +15,7 @@ import ADSB.Decoder.Velocity
 import ADSB.Decoder.OperationStatus
 import ADSB.Decoder.Util
 import ADSB.AircraftTracker
+import ADSB.ErrorCorrection
 
 -- Helper functions
 hexToByteString :: String -> BS.ByteString
@@ -158,6 +160,27 @@ main = hspec $ do
         result `shouldSatisfy` isJust
         let Just decodedMsg = result
         crcOk decodedMsg `shouldBe` False
+
+  describe "ADSB.ErrorCorrection" $ do
+    describe "Error correction" $ do
+      it "corrects single bit errors" $ do
+        let validMsg = hexToByteString "8D406B902015A678D4D220AA4BDA"
+        let corruptedMsg = BS.init validMsg `BS.snoc` (BS.last validMsg `xor` 1)
+        fixErrors corruptedMsg `shouldBe` validMsg
+
+      it "corrects two bit errors" $ do
+        let validMsg = hexToByteString "8D406B902015A678D4D220AA4BDA"
+        let corruptedMsg = BS.init (BS.init validMsg) `BS.snoc` ((BS.index validMsg (BS.length validMsg - 2)) `xor` 2) `BS.snoc` (BS.last validMsg `xor` 1)
+        fixErrors corruptedMsg `shouldBe` validMsg
+
+      it "doesn't change a valid message" $ do
+        let validMsg = hexToByteString "8D406B902015A678D4D220AA4BDA"
+        fixErrors validMsg `shouldBe` validMsg
+
+      it "doesn't 'fix' a message with more than two bit errors" $ do
+        let validMsg = hexToByteString "8D406B902015A678D4D220AA4BDA"
+        let corruptedMsg = BS.pack $ zipWith xor (BS.unpack validMsg) (cycle [1,2,4])
+        fixErrors corruptedMsg `shouldNotBe` validMsg
 
   describe "ADSB.AircraftTracker" $ do
     describe "Aircraft map updates" $ do
