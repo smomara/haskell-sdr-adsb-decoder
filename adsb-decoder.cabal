@@ -28,6 +28,7 @@ library
                         ADSB.Decoder.Position,
                         ADSB.Decoder.Velocity,
                         ADSB.Decoder.OperationStatus,
+                        ADSB.Decoder.CRC,
                         ADSB.Decoder.Util,
                         ADSB.AircraftTracker
     c-sources:          cbits/rtlsdr_wrapper.c
