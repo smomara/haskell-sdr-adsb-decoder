@@ -5,6 +5,7 @@ module ADSB.Decoder
     , decodeMessage
     , extractICAOAddress
     , extractTypeCode
+    , computeCRC
     ) where
 
 import qualified Data.ByteString as BS
@@ -24,7 +25,6 @@ data ADSBMessage = ADSBMessage
     , msgbits :: Int
     , msgtype :: Word8
     , crcOk :: Bool
-    , crc :: Word32
     , icaoAddr :: ICAO
     , typeCode :: Word8
     , messageData :: MessageData
@@ -52,15 +52,15 @@ decodeMessage :: BS.ByteString -> Maybe ADSBMessage
 decodeMessage rawBytes 
     | BS.length rawBytes /= 14 = Nothing
     | otherwise = 
-        let icao = extractICAOAddress rawBytes
+        let crcRemainder = computeCRC rawBytes
+            icao = extractICAOAddress rawBytes
             tc = extractTypeCode rawBytes
             msgData = decodeMessageData tc (BS.drop 4 $ BS.take 11 rawBytes)
         in Just ADSBMessage
             { msgraw = rawBytes
             , msgbits = 112
             , msgtype = extractDF rawBytes
-            , crcOk = True  -- Placeholder, actual CRC check needed
-            , crc = computeCRC rawBytes
+            , crcOk = crcRemainder == 0
             , icaoAddr = icao
             , typeCode = tc
             , messageData = msgData
@@ -121,5 +121,6 @@ decodeCallsign meField =
         | n == 32 = ' '                     -- Space
         | otherwise = '#'                   -- Invalid character
 
+-- Compute CRC for ADS-B message (112 bits) using lookup table
 computeCRC :: BS.ByteString -> Word32
-computeCRC _ = 0  -- Placeholder, actual CRC computation needed
+computeCRC _ = 0

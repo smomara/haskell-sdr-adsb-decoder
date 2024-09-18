@@ -139,6 +139,25 @@ main = hspec $ do
         cprLon evenCPR `shouldSatisfy` (\lon -> lon >= 0 && lon < 1)
         cprLat oddCPR  `shouldSatisfy` (\lat -> lat >= 0 && lat < 1)
         cprLon oddCPR  `shouldSatisfy` (\lon -> lon >= 0 && lon < 1)
+  
+    describe "CRC computation" $ do
+      it "correctly verifies CRC for a valid message" $ do
+        let msg = hexToByteString "8D406B902015A678D4D220AA4BDA"
+        computeCRC msg `shouldBe` 0
+        let result = decodeMessage msg
+        result `shouldSatisfy` isJust
+        let Just decodedMsg = result
+        crcOk decodedMsg `shouldBe` True
+
+      it "correctly identifies an invalid message" $ do
+        let msg = hexToByteString "8D4CA251204994B1C36E60A5343D"
+        putStrLn . show . computeCRC $ msg
+        putStrLn . show . decodeMessage $ msg
+        computeCRC msg `shouldNotBe` 0
+        let result = decodeMessage msg
+        result `shouldSatisfy` isJust
+        let Just decodedMsg = result
+        crcOk decodedMsg `shouldBe` False
 
   describe "ADSB.AircraftTracker" $ do
     describe "Aircraft map updates" $ do
